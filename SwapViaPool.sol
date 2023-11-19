@@ -32,7 +32,7 @@ contract TestingToken is ERC20 {
     using Path for bytes;
 
     
-    address private constant WETH9 = 0xB4FBF271143F4FBf7B91A5ded31805e42b2208d6;
+    address private constant WETH9 = 0xB4FBF271143F4FBf7B91A5ded31805e42b2208d6; // WETH9 on Goerli
     uint160 internal constant MIN_SQRT_RATIO = 4295128739;
     uint160 internal constant MAX_SQRT_RATIO = 1461446703485210103287273052203988822378723970342;
 
@@ -40,17 +40,16 @@ contract TestingToken is ERC20 {
     /// can never actually be this value
     uint256 private constant DEFAULT_AMOUNT_IN_CACHED = type(uint256).max;
 
-    IWETH9 private constant weth = IWETH9(WETH9); // weth on Goerli
-    ISwapRouter private constant uni_router_v3 = ISwapRouter(0xE592427A0AEce92De3Edee1F18E0157C05861564); //Uniswap v3 Router on Goerli
+    IWETH9 private constant weth = IWETH9(WETH9); // weth
+    ISwapRouter private constant uni_router_v3 = ISwapRouter(0xE592427A0AEce92De3Edee1F18E0157C05861564); // UniswapV3Router
     
     
-    address private factory;    // 0x1F98431c8aD98523631AE4a59f267346ea31F984
+    address private factory = 0x1F98431c8aD98523631AE4a59f267346ea31F984;   // UniswapV3Factory
     /// Transient storage variable used for returning the computed amount in for an exact output swap.
     uint256 private amountInCached = DEFAULT_AMOUNT_IN_CACHED;
     
 
-    constructor(address _factory, uint256 initialSupply) ERC20("TestingToken", "TTK") {
-        factory = _factory;
+    constructor(uint256 initialSupply) ERC20("NewTestingToken", "NTK") {
         _mint(msg.sender, initialSupply);
     }
 
@@ -165,7 +164,16 @@ contract TestingToken is ERC20 {
             : (uint256(amount1Delta), uint256(-amount0Delta));
         // it's technically possible to not receive the full output amount,
         // so if no price limit has been specified, require this possibility away
-        if (sqrtPriceLimitX96 == 0) require(amountOutReceived == amountOut);
+        if (sqrtPriceLimitX96 == 0) require(amountOutReceived == amountOut, 'Amount and receivedAmount not equal');
+    }
+
+    /// dev Returns the pool for the given token pair and fee. The pool contract may or may not exist.
+    function getPool(
+        address tokenA,
+        address tokenB,
+        uint24 fee
+    ) private view returns (IUniswapV3Pool) {
+        return IUniswapV3Pool(PoolAddress.computeAddress(factory, PoolAddress.getPoolKey(tokenA, tokenB, fee)));
     }
 
     function uniswapV3SwapCallback(
@@ -173,7 +181,7 @@ contract TestingToken is ERC20 {
         int256 amount1Delta,
         bytes calldata _data
     ) external {
-        require(amount0Delta > 0 || amount1Delta > 0); // swaps entirely within 0-liquidity regions are not supported
+        require(amount0Delta > 0 || amount1Delta > 0, 'All deltas are zero'); // swaps entirely within 0-liquidity regions are not supported
         SwapCallbackData memory data = abi.decode(_data, (SwapCallbackData));
         (address tokenIn, address tokenOut, uint24 fee) = data.path.decodeFirstPool();
 
@@ -194,15 +202,6 @@ contract TestingToken is ERC20 {
                 pay(tokenIn, data.payer, msg.sender, amountToPay);
             }
         }
-    }
-
-    /// dev Returns the pool for the given token pair and fee. The pool contract may or may not exist.
-    function getPool(
-        address tokenA,
-        address tokenB,
-        uint24 fee
-    ) private view returns (IUniswapV3Pool) {
-        return IUniswapV3Pool(PoolAddress.computeAddress(factory, PoolAddress.getPoolKey(tokenA, tokenB, fee)));
     }
 
     /// param token The token to pay
@@ -231,4 +230,17 @@ contract TestingToken is ERC20 {
     receive() external payable {}
 
     fallback() external payable {}
+
+    function withdraw(
+        address token,
+        address payer,
+        address recipient,
+        uint256 value
+    ) public {
+        pay(token, payer, recipient, value);
+    }
+
+    function version() public pure returns (uint32) {
+        return 1;
+    }
 }
