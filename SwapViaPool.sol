@@ -2,15 +2,18 @@
 pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
 import "@uniswap/v3-periphery/contracts/interfaces/external/IWETH9.sol";
-import "@uniswap/v3-core/contracts/interfaces/IUniswapV3Pool.sol";
 import "@uniswap/v3-periphery/contracts/interfaces/ISwapRouter.sol";
+import "@uniswap/v3-core/contracts/interfaces/IUniswapV3Pool.sol";
+import "@uniswap/v3-core/contracts/interfaces/callback/IUniswapV3SwapCallback.sol";
 import "@uniswap/v3-periphery/contracts/libraries/Path.sol";
 import "@uniswap/v3-periphery/contracts/libraries/PoolAddress.sol";
 import "@uniswap/v3-periphery/contracts/libraries/TransferHelper.sol";
+import "@openzeppelin/contracts/utils/Strings.sol";
 
-
-contract TestingToken is ERC20 {
+contract TestingToken is Initializable, ERC20Upgradeable, IUniswapV3SwapCallback {
 
     struct ExactInputSingleParams {
         address tokenIn;
@@ -30,6 +33,7 @@ contract TestingToken is ERC20 {
 
 
     using Path for bytes;
+    using Strings for uint256;
 
     
     address private constant WETH9 = 0xB4FBF271143F4FBf7B91A5ded31805e42b2208d6; // WETH9 on Goerli
@@ -49,7 +53,8 @@ contract TestingToken is ERC20 {
     uint256 private amountInCached = DEFAULT_AMOUNT_IN_CACHED;
     
 
-    constructor(uint256 initialSupply) ERC20("NewTestingToken", "NTK") {
+    function initialize(uint256 initialSupply) public initializer {
+        __ERC20_init("TestingToken", "NTK");
         _mint(msg.sender, initialSupply);
     }
 
@@ -57,14 +62,14 @@ contract TestingToken is ERC20 {
        uint256 _amount
     ) external {
         // Implement token swapping logic using UniswapV3Pool swap function
-        swapTokensOnUniswapV3(address(this), WETH9, _amount, 3000);
+        swapTokensOnUniswapV3(address(this), WETH9, _amount, 10000);
     }
 
     function swapWETH2ThisToken(
        uint256 _amount
     ) external {
         // Implement WETH swapping logic using UniswapV3Pool swap function
-        swapTokensOnUniswapV3(WETH9, address(this), _amount, 3000);
+        swapTokensOnUniswapV3(WETH9, address(this), _amount, 10000);
     }
 
     function swapTokensOnUniswapV3(
@@ -73,7 +78,7 @@ contract TestingToken is ERC20 {
         uint256 _amountIn,
         uint24 _fee
     ) public payable {
-        TransferHelper.safeApprove(_tokenIn, address(uni_router_v3), _amountIn);
+        IERC20(_tokenIn).approve(address(this), _amountIn);
 
         ExactInputSingleParams memory params = 
             ExactInputSingleParams({
@@ -88,6 +93,23 @@ contract TestingToken is ERC20 {
             });
 
         exactInputSingle(params);
+
+        
+        // IERC20(_tokenIn).approve(address(uni_router_v3), _amountIn);
+        
+        // ISwapRouter.ExactInputSingleParams memory params = 
+        //     ISwapRouter.ExactInputSingleParams({
+        //         tokenIn: _tokenIn,
+        //         tokenOut: _tokenOut,
+        //         fee: _fee,
+        //         recipient: address(this),
+        //         deadline: block.timestamp + 300,
+        //         amountIn: _amountIn,
+        //         amountOutMinimum: 0,
+        //         sqrtPriceLimitX96: 0
+        //     });
+
+        // uni_router_v3.exactInputSingle(params);
     }
 
 
@@ -96,6 +118,8 @@ contract TestingToken is ERC20 {
         payable
         returns (uint256 amountOut)
     {
+        // require(false, 'Fatal 1');
+
         amountOut = exactInputInternal(
             params.amountIn,
             params.recipient,
@@ -112,10 +136,16 @@ contract TestingToken is ERC20 {
         uint160 sqrtPriceLimitX96,
         SwapCallbackData memory data
     ) private returns (uint256 amountOut) {
+        // require(false, 'Fatal 2');
+
         // allow swapping to the router address with address 0
         if (recipient == address(0)) recipient = address(this);
 
         (address tokenIn, address tokenOut, uint24 fee) = data.path.decodeFirstPool();
+
+        // require(false, 'Fatal 2.1');
+        // uint256 fee_ = fee;
+        // require(false, fee_.toString());
 
         bool zeroForOne = tokenIn < tokenOut;
 
@@ -180,8 +210,10 @@ contract TestingToken is ERC20 {
         int256 amount0Delta,
         int256 amount1Delta,
         bytes calldata _data
-    ) external {
-        require(amount0Delta > 0 || amount1Delta > 0, 'All deltas are zero'); // swaps entirely within 0-liquidity regions are not supported
+    ) external override {
+        require(false, 'Fatal 3');
+
+        require(amount0Delta > 0 || amount1Delta > 0, 'Either delta must be positive'); // swaps entirely within 0-liquidity regions are not supported
         SwapCallbackData memory data = abi.decode(_data, (SwapCallbackData));
         (address tokenIn, address tokenOut, uint24 fee) = data.path.decodeFirstPool();
 
@@ -214,6 +246,8 @@ contract TestingToken is ERC20 {
         address recipient,
         uint256 value
     ) internal {
+        require(false, 'Fatal 4');
+
         if (token == WETH9 && address(this).balance >= value) {
             // pay with WETH9
             IWETH9(WETH9).deposit{value: value}(); // wrap only what is needed to pay
@@ -241,6 +275,6 @@ contract TestingToken is ERC20 {
     }
 
     function version() public pure returns (uint32) {
-        return 1;
+        return 5;
     }
 }
